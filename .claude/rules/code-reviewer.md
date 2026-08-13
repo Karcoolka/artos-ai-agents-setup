@@ -126,6 +126,66 @@ users[0] can be undefined
 
 ---
 
+## Domain Identifiers
+
+Check:
+
+- critical domain IDs are not all represented as raw `string`
+- tenant IDs, user IDs, invoice IDs and company IDs cannot be accidentally mixed
+- service APIs make dangerous ID swaps hard or impossible
+
+
+Reject:
+
+```ts
+async function getInvoice(tenantId: string, invoiceId: string) {}
+```
+
+when both values represent different domain identifiers.
+
+
+Prefer:
+
+```ts
+type TenantId = Brand<string, 'TenantId'>;
+type InvoiceId = Brand<string, 'InvoiceId'>;
+
+async function getInvoice(tenantId: TenantId, invoiceId: InvoiceId) {}
+```
+
+
+---
+
+## Typed Configuration Objects
+
+Check:
+
+- known configuration keys are not widened to arbitrary strings
+- permission maps, feature flags and route metadata preserve useful inference
+- `satisfies` is used when validating object shape without losing exact values
+
+
+Reject:
+
+```ts
+const permissions: Record<string, string[]> = {};
+```
+
+when the valid resources and actions are known.
+
+
+Prefer:
+
+```ts
+const permissions = {
+  invoice: ['read', 'write'],
+  customer: ['read'],
+} satisfies Record<Resource, Action[]>;
+```
+
+
+---
+
 # 3. Validation Review
 
 Check every external boundary.
@@ -310,12 +370,13 @@ Look for:
 - missing transactions
 - missing indexes
 - loading unnecessary fields
+- missing tenant scope on tenant-owned data
 
 
 Reject:
 
 ```ts
-findMany()
+await prisma.user.findMany()
 ```
 
 when only few fields are needed.
@@ -354,6 +415,55 @@ Create Audit Log
 ```
 
 should usually be atomic.
+
+
+Reject:
+
+```ts
+const invoice = await prisma.invoice.create({ data: invoiceData });
+await prisma.auditLog.create({ data: auditData });
+```
+
+
+Prefer:
+
+```ts
+await prisma.$transaction(async (tx) => {
+  const invoice = await tx.invoice.create({ data: invoiceData });
+  await tx.auditLog.create({ data: auditData });
+});
+```
+
+
+---
+
+## Tenant-Scoped Queries
+
+Check:
+
+- every tenant-owned query includes tenant scope or proven RLS enforcement
+- reads, updates and deletes cannot cross tenant boundaries
+- tenant isolation is visible in the query or enforced by a shared helper
+
+
+Reject:
+
+```ts
+await prisma.invoice.findUnique({
+  where: { id: invoiceId },
+});
+```
+
+for tenant-owned data.
+
+
+Prefer:
+
+```ts
+await prisma.invoice.findFirst({
+  where: { id: invoiceId, tenantId },
+});
+```
 
 ---
 
@@ -547,6 +657,7 @@ Examples:
 - data corruption risk
 - broken transaction handling
 - leaking sensitive data
+- missing tenant isolation on tenant-owned data
 
 
 ## 🟠 Warning
@@ -558,6 +669,7 @@ Examples:
 - maintainability issue
 - performance concern
 - missing validation
+- missing transaction around related writes
 
 
 ## 🟢 Suggestion
