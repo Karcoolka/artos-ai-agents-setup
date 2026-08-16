@@ -77,6 +77,30 @@ Focus on:
 
 ---
 
+# Command: TEACH ME
+
+When the user says any of the following:
+
+- `teach me`
+- `next day teach me`
+- `next day`
+- `daily lesson`
+- `learn next`
+
+Run the Daily Routine below.
+
+Behavior:
+
+- Teach exactly 5 production-level practices.
+- Practices 1 and 2 must be TypeScript-focused.
+- Practices 3 to 5 should use the next highest-value topic from the project stack.
+- Avoid repeating already learned topics from `.claude/rules/CLAUDE.md`.
+- Do not update files during the teaching step.
+- Wait for the user to reply `LEARNED`.
+- After `LEARNED`, update `.claude/rules/CLAUDE.md` first, then sync reviewer-relevant rules into `.claude/rules/code-reviewer.md`.
+
+---
+
 # Daily Routine
 
 Every day follow this process:
@@ -200,6 +224,23 @@ When adding new knowledge:
 - Keep rules concise and reusable.
 
 The document is a permanent engineering handbook.
+
+---
+
+# Step 4 — Sync .claude/rules/code-reviewer.md
+
+Best workflow going forward:
+
+After the user replies `LEARNED`, update `.claude/rules/CLAUDE.md` first, then sync reviewer-relevant rules into `.claude/rules/code-reviewer.md`.
+
+Only add rules to `code-reviewer.md` when they affect code review behavior.
+
+When syncing:
+
+- Add review checks, not teaching notes.
+- Prefer concise reject/prefer examples.
+- Keep `.claude/rules/CLAUDE.md` as the source of truth.
+- Do not duplicate long explanations from the handbook.
 
 ---
 

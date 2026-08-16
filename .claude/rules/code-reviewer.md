@@ -186,6 +186,64 @@ const permissions = {
 
 ---
 
+## Readonly Inputs
+
+Check:
+
+- service and utility inputs are not mutated unexpectedly
+- arrays are copied before sorting or modifying
+- DTOs and calculation inputs use `readonly` where mutation is not intended
+
+
+Reject:
+
+```ts
+function calculateTotals(lines: InvoiceLine[]) {
+  lines.sort((a, b) => a.position - b.position);
+}
+```
+
+
+Prefer:
+
+```ts
+function calculateTotals(lines: readonly InvoiceLine[]) {
+  return [...lines].sort((a, b) => a.position - b.position);
+}
+```
+
+
+---
+
+## Generic Constraints
+
+Check:
+
+- generic helpers declare the shape they depend on
+- unconstrained generics are not combined with unsafe casts
+- reusable helpers do not pretend to support more inputs than they actually support
+
+
+Reject:
+
+```ts
+function getId<T>(entity: T) {
+  return (entity as any).id;
+}
+```
+
+
+Prefer:
+
+```ts
+function getId<T extends { id: string }>(entity: T) {
+  return entity.id;
+}
+```
+
+
+---
+
 # 3. Validation Review
 
 Check every external boundary.
@@ -519,12 +577,56 @@ Avoid:
 
 - duplicated server state
 - unnecessary global state
+- copying TanStack Query data into `useState` unless editing a local draft
 
 
 Prefer:
 
 - TanStack Query for server state
 - local state for UI state
+
+
+Reject:
+
+```tsx
+const { data } = useQuery({ queryKey, queryFn });
+const [items, setItems] = useState(data ?? []);
+```
+
+
+Prefer:
+
+```tsx
+const { data: items = [] } = useQuery({ queryKey, queryFn });
+```
+
+
+---
+
+## Server-State UI
+
+Check:
+
+- loading states are handled
+- error states are handled
+- empty states are handled
+- components do not assume server data always exists
+
+
+Reject:
+
+```tsx
+return <InvoiceTable invoices={data.items} />;
+```
+
+
+Prefer:
+
+```tsx
+if (isLoading) return <Spinner />;
+if (isError) return <ErrorState message="Invoices could not be loaded." />;
+if (!data.items.length) return <EmptyState message="No invoices found." />;
+```
 
 
 ---
@@ -534,10 +636,34 @@ Prefer:
 Check:
 
 - query keys stability
+- shared query key factories
 - cache usage
 - loading/error states
+- empty states
 - unnecessary refetching
 - optimistic updates correctness
+
+
+Reject:
+
+```tsx
+useQuery({ queryKey: ['invoice', id], queryFn: () => fetchInvoice(id) });
+```
+
+when query keys are hand-written across multiple files.
+
+
+Prefer:
+
+```ts
+const invoiceKeys = {
+  all: ['invoices'] as const,
+  detail: (id: string) => ['invoices', 'detail', id] as const,
+};
+```
+
+
+Review cache invalidation against the same key factory.
 
 
 ---

@@ -197,6 +197,40 @@ const permissions = {
 
 ---
 
+### 8. Use `readonly` Inputs for Service Contracts
+
+- Mark input arrays and objects as `readonly` when the function should not mutate caller-owned data.
+- Copy before sorting, filtering in-place or transforming mutable collections.
+- Mutation bugs are especially dangerous in calculations, DTO mappers and shared helpers.
+
+Example:
+
+```ts
+function calculateTotals(lines: readonly InvoiceLine[]) {
+    return [...lines]
+        .sort((a, b) => a.position - b.position)
+        .reduce((sum, line) => sum + line.totalCents, 0);
+}
+```
+
+---
+
+### 9. Constrain Generics to the Shape They Require
+
+- Generic functions must declare the fields or behavior they depend on.
+- Avoid unconstrained generics that require `any`, unsafe casts or hidden assumptions.
+- Prefer `T extends ...` when reusable helpers need a specific property.
+
+Example:
+
+```ts
+function getId<T extends { id: string }>(entity: T) {
+    return entity.id;
+}
+```
+
+---
+
 ## Common Code Review Comments
 
 ### ❌ Never use `any`
@@ -261,6 +295,18 @@ Use `satisfies` instead of broad annotations when validating known object shapes
 
 ---
 
+### ❌ Do not mutate caller-owned inputs
+
+Use `readonly` inputs and copy arrays before sorting or modifying them.
+
+---
+
+### ❌ Do not use unconstrained generics
+
+Constrain generics to the object shape the function actually requires.
+
+---
+
 ## Daily Development Checklist
 
 Before opening a Pull Request ask yourself:
@@ -275,6 +321,8 @@ Before opening a Pull Request ask yourself:
 - [ ] Does this compile with strict mode without warnings?
 - [ ] Are critical domain IDs protected from being mixed?
 - [ ] Did I use `satisfies` for typed maps or config objects where useful?
+- [ ] Are service inputs protected from accidental mutation?
+- [ ] Do generic helpers declare the shape they depend on?
 
 ---
 
@@ -455,6 +503,103 @@ Before opening a Pull Request ask yourself:
 
 ---
 
+# React Architecture
+
+## Core Principles
+
+### 1. Do Not Duplicate Server State in Local State
+
+- TanStack Query owns server state.
+- Do not copy query results into `useState` unless the user is editing a local draft.
+- Duplicated server state creates stale UI and confusing synchronization bugs.
+
+Example:
+
+```tsx
+const { data: invoices = [] } = useQuery({
+    queryKey: invoiceKeys.all,
+    queryFn: fetchInvoices,
+});
+```
+
+### 2. Handle Loading, Error and Empty States Explicitly
+
+- Server-backed UI must show clear states for loading, failure and no data.
+- Do not render nested data before checking that it exists.
+- ERP users need actionable feedback when critical data cannot be loaded.
+
+Example:
+
+```tsx
+if (isLoading) return <Spinner />;
+if (isError) return <ErrorState message="Invoices could not be loaded." />;
+if (!data.items.length) return <EmptyState message="No invoices found." />;
+```
+
+---
+
+## Common Code Review Comments
+
+### Do Not Copy Query Data Into Local State
+
+Use TanStack Query as the source of truth unless the UI is editing a draft.
+
+### Handle All Server-State UI States
+
+Every server-backed screen needs loading, error and empty states.
+
+---
+
+## Daily Development Checklist
+
+Before opening a Pull Request ask yourself:
+
+- [ ] Did I avoid duplicating TanStack Query data in local state?
+- [ ] Does every server-backed component handle loading state?
+- [ ] Does every server-backed component handle error state?
+- [ ] Does every server-backed component handle empty state?
+
+---
+
+# TanStack Query
+
+## Core Principles
+
+### 1. Use Stable Query Key Factories
+
+- Centralize query keys per feature.
+- Query keys should be consistent across list queries, detail queries and invalidation.
+- Stable keys prevent cache collisions, stale data and unnecessary refetching.
+
+Example:
+
+```ts
+const invoiceKeys = {
+    all: ['invoices'] as const,
+    detail: (id: string) => ['invoices', 'detail', id] as const,
+};
+```
+
+---
+
+## Common Code Review Comments
+
+### Use Shared Query Key Factories
+
+Do not hand-write query keys in multiple places.
+
+---
+
+## Daily Development Checklist
+
+Before opening a Pull Request ask yourself:
+
+- [ ] Are query keys created by a shared key factory?
+- [ ] Do mutations invalidate the same keys used by queries?
+- [ ] Are list and detail query keys structured consistently?
+
+---
+
 ## Staff Engineer Principles
 
 - Let the compiler prevent bugs.
@@ -471,6 +616,10 @@ Before opening a Pull Request ask yourself:
 - Protect domain identifiers with stronger types when mistakes are expensive.
 - Treat database consistency and tenant isolation as production safety requirements.
 - Query only the data the use case actually needs.
+- Avoid mutating caller-owned data.
+- Let TanStack Query own server state.
+- Make server-backed UI states explicit.
+- Centralize query keys for predictable caching.
 
 ---
 
@@ -494,3 +643,8 @@ Before opening a Pull Request ask yourself:
 - ✅ Prisma transactions for multi-step writes
 - ✅ Prisma field selection with `select`
 - ✅ Tenant-scoped Prisma queries
+- ✅ Readonly service inputs
+- ✅ Generic constraints
+- ✅ Avoid duplicated React server state
+- ✅ Stable TanStack Query key factories
+- ✅ Loading, error and empty UI states
