@@ -244,6 +244,73 @@ function getId<T extends { id: string }>(entity: T) {
 
 ---
 
+## Command and Response Types
+
+Check:
+
+- create/update inputs are not using response DTO types
+- clients cannot submit server-owned fields such as `id`, `role`, `createdAt` or tenant metadata
+- API response contracts expose only intentional fields
+
+
+Reject:
+
+```ts
+async function createUser(input: UserResponse) {}
+```
+
+when `UserResponse` contains server-owned or read-only fields.
+
+
+Prefer:
+
+```ts
+type CreateUserInput = {
+  email: string;
+  password: string;
+};
+
+type UserResponse = {
+  id: string;
+  email: string;
+};
+```
+
+
+---
+
+## Typed Business Results
+
+Check:
+
+- expected business outcomes are modeled as typed result states
+- callers are forced to handle normal domain outcomes
+- exceptions are reserved for unexpected failures
+
+
+Reject:
+
+```ts
+if (alreadyPaid) {
+  throw new Error('Invoice already paid');
+}
+```
+
+when the condition is an expected business outcome.
+
+
+Prefer:
+
+```ts
+type PayInvoiceResult =
+  | { status: 'paid'; invoice: InvoiceDto }
+  | { status: 'already-paid' }
+  | { status: 'insufficient-permission' };
+```
+
+
+---
+
 # 3. Validation Review
 
 Check every external boundary.
@@ -257,6 +324,9 @@ Review:
 - RabbitMQ messages
 - SSE payloads
 - external API responses
+- strict Zod schemas for API input
+- coercion and normalization at the boundary
+- stable validation error responses
 
 
 Ask:
@@ -277,6 +347,100 @@ Prefer:
 
 ```ts
 const user = UserSchema.parse(req.body);
+```
+
+
+---
+
+## Strict Zod Schemas
+
+Check:
+
+- request body schemas reject unknown fields unless extras are intentional
+- clients cannot over-post server-owned fields
+- `.passthrough()` is only used with a documented reason
+
+
+Reject:
+
+```ts
+const CreateCustomerSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+```
+
+when unknown fields should not be accepted.
+
+
+Prefer:
+
+```ts
+const CreateCustomerSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+}).strict();
+```
+
+
+---
+
+## Boundary Normalization
+
+Check:
+
+- numbers, booleans and dates are coerced before services
+- parsing is not scattered across controllers and services
+- normalized input is what enters business logic
+
+
+Reject:
+
+```ts
+const page = Number(req.query.page);
+const dueDate = new Date(req.body.dueDate);
+```
+
+
+Prefer:
+
+```ts
+const ListInvoicesSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  dueDate: z.coerce.date().optional(),
+});
+```
+
+
+---
+
+## Validation Error Shape
+
+Check:
+
+- raw Zod errors are not returned directly
+- validation responses use the project's stable API error format
+- frontend forms can map errors to fields predictably
+
+
+Reject:
+
+```ts
+res.status(400).json(error);
+```
+
+when `error` is a raw Zod error.
+
+
+Prefer:
+
+```ts
+throw new ValidationError(
+  result.error.issues.map((issue) => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+  })),
+);
 ```
 
 ---

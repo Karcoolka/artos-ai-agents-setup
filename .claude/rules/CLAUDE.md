@@ -231,6 +231,45 @@ function getId<T extends { id: string }>(entity: T) {
 
 ---
 
+### 10. Separate Command Types from Response Types
+
+- Do not reuse response DTOs as create or update input types.
+- Command/input contracts should contain only fields the caller is allowed to provide.
+- Response contracts should contain only fields the API intentionally exposes.
+
+Example:
+
+```ts
+type CreateUserInput = {
+    email: string;
+    password: string;
+};
+
+type UserResponse = {
+    id: string;
+    email: string;
+};
+```
+
+---
+
+### 11. Use Typed Results for Expected Business Outcomes
+
+- Expected business outcomes should be represented as typed result states.
+- Reserve exceptions for unexpected failures.
+- Callers should be forced to handle domain outcomes such as already paid, insufficient stock or missing permission.
+
+Example:
+
+```ts
+type PayInvoiceResult =
+    | { status: 'paid'; invoice: InvoiceDto }
+    | { status: 'already-paid' }
+    | { status: 'insufficient-permission' };
+```
+
+---
+
 ## Common Code Review Comments
 
 ### ❌ Never use `any`
@@ -307,6 +346,18 @@ Constrain generics to the object shape the function actually requires.
 
 ---
 
+### ❌ Do not reuse response DTOs as command inputs
+
+Create/update inputs and API responses are separate contracts.
+
+---
+
+### ❌ Do not throw for expected business outcomes
+
+Use typed result states for normal domain outcomes the caller must handle.
+
+---
+
 ## Daily Development Checklist
 
 Before opening a Pull Request ask yourself:
@@ -323,6 +374,8 @@ Before opening a Pull Request ask yourself:
 - [ ] Did I use `satisfies` for typed maps or config objects where useful?
 - [ ] Are service inputs protected from accidental mutation?
 - [ ] Do generic helpers declare the shape they depend on?
+- [ ] Are command input types separate from response DTOs?
+- [ ] Are expected business outcomes represented with typed results?
 
 ---
 
@@ -423,6 +476,88 @@ Before opening a Pull Request ask yourself:
 - [ ] Did I pass explicit context instead of `req`?
 - [ ] Are errors handled by shared error middleware?
 - [ ] Did I map Prisma entities to API DTOs?
+
+---
+
+# Zod Validation
+
+## Core Principles
+
+### 1. Use Strict Schemas for API Inputs
+
+- API input schemas should reject unknown fields unless there is a specific reason to allow them.
+- Strict schemas reduce over-posting risk and prevent hidden client contracts.
+- Treat extra fields from clients as untrusted input.
+
+Example:
+
+```ts
+const CreateCustomerSchema = z.object({
+    name: z.string(),
+    email: z.string().email(),
+}).strict();
+```
+
+### 2. Normalize Input at the Boundary
+
+- Coerce and normalize external input before it reaches business logic.
+- Services should not care whether data came from HTTP strings, forms, CSV imports or JSON.
+- Parse dates, numbers and booleans once at the boundary.
+
+Example:
+
+```ts
+const ListInvoicesSchema = z.object({
+    page: z.coerce.number().int().positive().default(1),
+    dueDate: z.coerce.date().optional(),
+});
+```
+
+### 3. Return Consistent Validation Errors
+
+- Do not leak raw Zod errors directly from APIs.
+- Map validation issues to a stable API error format that frontend forms can depend on.
+- Include useful paths and messages without exposing internals.
+
+Example:
+
+```ts
+const result = schema.safeParse(req.body);
+
+if (!result.success) {
+    throw new ValidationError(result.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+    })));
+}
+```
+
+---
+
+## Common Code Review Comments
+
+### Use Strict Input Schemas
+
+Reject unknown fields for API inputs unless extra keys are intentional.
+
+### Normalize Before Business Logic
+
+Coerce dates, numbers and booleans at the boundary.
+
+### Return Stable Validation Errors
+
+Map Zod issues to the project's API error shape.
+
+---
+
+## Daily Development Checklist
+
+Before opening a Pull Request ask yourself:
+
+- [ ] Are API input schemas strict where appropriate?
+- [ ] Are query params and form values normalized before services?
+- [ ] Are raw Zod errors hidden behind a stable API error format?
+- [ ] Can frontend forms reliably map validation errors to fields?
 
 ---
 
@@ -620,6 +755,10 @@ Before opening a Pull Request ask yourself:
 - Let TanStack Query own server state.
 - Make server-backed UI states explicit.
 - Centralize query keys for predictable caching.
+- Keep command inputs separate from response DTOs.
+- Model expected business outcomes as explicit result states.
+- Normalize and validate external input before business logic.
+- Return stable validation errors from APIs.
 
 ---
 
@@ -648,3 +787,8 @@ Before opening a Pull Request ask yourself:
 - ✅ Avoid duplicated React server state
 - ✅ Stable TanStack Query key factories
 - ✅ Loading, error and empty UI states
+- ✅ Separate command types from response types
+- ✅ Typed results for expected business outcomes
+- ✅ Strict Zod API schemas
+- ✅ Boundary input normalization
+- ✅ Stable validation error responses
